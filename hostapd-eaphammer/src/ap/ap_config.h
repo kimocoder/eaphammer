@@ -83,6 +83,11 @@ typedef enum hostap_security_policy {
 	SECURITY_OSEN = 5
 } secpolicy;
 
+struct hostapd_karma_info {
+	u8 ssid[SSID_MAX_LEN];
+	size_t ssid_len;
+};
+
 struct hostapd_ssid {
 	u8 ssid[SSID_MAX_LEN];
 	size_t ssid_len;
