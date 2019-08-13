@@ -9,7 +9,7 @@ class OutputFile(object):
 
     def __init__(self, name='', ext=''):
         datestring = datetime.strftime(datetime.now(), '%Y-%m-%d-%H-%M-%S')
-        randstring = ''.join(random.choice(string.ascii_letters+string.digits) for _ in xrange(32))
+        randstring = ''.join(random.choice(string.ascii_letters+string.digits) for _ in range(32))
         self.str = ''
         if name != '':
             self.str += '%s-' % name
@@ -32,13 +32,27 @@ SCRIPT_DIR = os.path.join(ROOT_DIR, 'scripts')
 DB_DIR = os.path.join(ROOT_DIR, 'db')
 TMP_DIR = os.path.join(ROOT_DIR, 'tmp')
 WORDLIST_DIR = os.path.join(ROOT_DIR, 'wordlists')
-HOSTAPD_DIR = os.path.join(ROOT_DIR, 'hostapd-eaphammer', 'hostapd')
+LOCAL_DIR = os.path.join(ROOT_DIR, 'local')
+HOSTAPD_DIR = os.path.join(LOCAL_DIR, 'hostapd-eaphammer', 'hostapd')
 CERTS_DIR = os.path.join(ROOT_DIR, 'certs')
 LOOT_DIR = os.path.join(ROOT_DIR, 'loot')
 THIRDPARTY_DIR = os.path.join(ROOT_DIR, 'thirdparty')
-ASLEAP_DIR = os.path.join(THIRDPARTY_DIR, 'asleap')
-HCXDUMPTOOL_DIR = os.path.join(THIRDPARTY_DIR, 'hcxdumptool')
-HCXTOOLS_DIR = os.path.join(THIRDPARTY_DIR, 'hcxtools')
+ASLEAP_DIR = os.path.join(LOCAL_DIR, 'asleap')
+HCXDUMPTOOL_DIR = os.path.join(LOCAL_DIR, 'hcxdumptool')
+HCXTOOLS_DIR = os.path.join(LOCAL_DIR, 'hcxtools')
+RESPONDER_DIR = os.path.join(LOCAL_DIR, 'Responder')
+
+# responder paths
+RESPONDER_BIN = os.path.join(RESPONDER_DIR, 'Responder.py')
+RESPONDER_DB = os.path.join(DB_DIR, 'Responder.db')
+RESPONDER_SESSION_LOG = os.path.join(LOG_DIR, 'Responder-Session.log')
+RESPONDER_POISONERS_LOG = os.path.join(LOG_DIR, 'Poisoners-Session.log')
+RESPONDER_ANALYZER_LOG = os.path.join(LOG_DIR, 'Analyzer-Session.log')
+RESPONDER_CONFIG_LOG = os.path.join(LOG_DIR, 'Config-Responder.log')
+RESPONDER_HTML = os.path.join(RESPONDER_DIR, 'files/AccessDenied.html')
+RESPONDER_EXE = os.path.join(RESPONDER_DIR, 'files/BindShell.exe')
+RESPONDER_CERT = os.path.join(RESPONDER_DIR, 'certs/responder.crt')
+RESPONDER_KEY = os.path.join(RESPONDER_DIR, 'certs/responder.key')
 
 # asleap paths
 ASLEAP_BIN = os.path.join(ASLEAP_DIR, 'asleap')
@@ -49,6 +63,14 @@ output_file = OutputFile(name='hcxdumptool-output', ext='txt').string()
 HCXDUMPTOOL_OFILE = os.path.join(TMP_DIR, output_file)
 output_file = OutputFile(name='hcxdumptool-filter', ext='txt').string()
 HCXDUMPTOOL_FILTER = os.path.join(TMP_DIR, output_file)
+
+# wpa handshake cpature file paths
+#options['psk_capture_file']
+output_file = OutputFile(name='wpa_handshake_capture', ext='hccapx').string()
+PSK_CAPTURE_FILE = os.path.join(LOOT_DIR, output_file)
+
+# openssl paths
+OPENSSL_BIN = os.path.join(LOCAL_DIR, 'openssl/local/bin/openssl')
 
 # hcxtools paths
 HCXPCAPTOOL_BIN = os.path.join(HCXTOOLS_DIR, 'hcxpcaptool')
@@ -70,21 +92,20 @@ FIFO_PATH = os.path.join(TMP_DIR, OutputFile(ext='fifo').string())
 
 EAP_USER_FILE = os.path.join(DB_DIR, 'eaphammer.eap_user')
 EAP_USER_HEADER = os.path.join(DB_DIR, 'eap_user_header.txt')
-CA_CNF = os.path.join(CERTS_DIR, 'ca.cnf')
-SERVER_CNF = os.path.join(CERTS_DIR, 'server.cnf')
-CLIENT_CNF = os.path.join(CERTS_DIR, 'client.cnf')
-BOOTSTRAP_FILE = os.path.join(CERTS_DIR, 'bootstrap')
-CA_PEM = os.path.join(CERTS_DIR, 'ca.pem')
-SERVER_PEM = os.path.join(CERTS_DIR, 'server.pem')
-PRIVATE_KEY = os.path.join(CERTS_DIR, 'server.pem')
-DH_FILE = os.path.join(CERTS_DIR, 'dh')
 
+# cert paths
+CA_CERTS_DIR = os.path.join(CERTS_DIR, 'ca')
+SERVER_CERTS_DIR = os.path.join(CERTS_DIR, 'server')
+ACTIVE_CERTS_DIR = os.path.join(CERTS_DIR, 'active')
+ACTIVE_FULL_CHAIN = os.path.join(ACTIVE_CERTS_DIR, 'fullchain.pem')
+
+DH_FILE = os.path.join(CERTS_DIR, 'dh')
 
 # everything else
 DNSMASQ_LOG = os.path.join(LOG_DIR, 'dnsmasq.log')
 
 DNSMASQ_CONF = os.path.join(TMP_DIR, OutputFile(name='dnsmasq', ext='conf').string())
-RESPONDER_CONF = os.path.join(TMP_DIR, OutputFile(name='Responder', ext='conf').string())
+RESPONDER_CONF = os.path.join(RESPONDER_DIR, 'Responder.conf')
 
 DHCP_SCRIPT = os.path.join(SCRIPT_DIR, 'dhcp_script.py')
 
@@ -100,6 +121,7 @@ paths = {
         'db' : DB_DIR,
         'tmp' : TMP_DIR,
         'wordlists' : WORDLIST_DIR,
+        'local' : LOCAL_DIR,
         'hostapd' : HOSTAPD_DIR,
         'asleap' : ASLEAP_DIR,
         'certs' : CERTS_DIR,
@@ -107,6 +129,7 @@ paths = {
         'hcxdumptool' : HCXDUMPTOOL_DIR,
         'hcxtools' : HCXTOOLS_DIR,
         'loot' : LOOT_DIR,
+        'responder' : RESPONDER_DIR,
     },
 
     'hcxtools' : {
@@ -116,6 +139,9 @@ paths = {
             'bin' : HCXPCAPTOOL_BIN,
             'ofile' : HCXPCAPTOOL_OFILE,
         },
+    },
+    'psk' : {
+        'psk_capture_file' : PSK_CAPTURE_FILE ,
     },
 
     'hcxdumptool' : {
@@ -142,17 +168,24 @@ paths = {
         'log' : HOSTAPD_LOG,
         'eap_user'  : EAP_USER_FILE,
         'eap_user_header'  : EAP_USER_HEADER,
-        'ca_cnf' : CA_CNF,
-        'server_cnf' : SERVER_CNF,
-        'client_cnf' : CLIENT_CNF,
-        'bootstrap' : BOOTSTRAP_FILE,
-        'ca_pem' : CA_PEM,
-        'server_pem' : SERVER_PEM,
-        'private_key' : PRIVATE_KEY,
-        'dh' : DH_FILE,
         'fifo' : FIFO_PATH,
         'conf' : HOSTAPD_CONF,
         'save' : HOSTAPD_SAVE,
+    },
+
+    'certs' : {
+
+        'dh' : DH_FILE,
+        'server_certs_dir' : SERVER_CERTS_DIR,
+        'ca_certs_dir' : CA_CERTS_DIR,
+        'active_certs_dir' : ACTIVE_CERTS_DIR,
+        'active_full_chain' : ACTIVE_FULL_CHAIN,
+
+    },
+
+    'openssl' : {
+
+        'bin' : OPENSSL_BIN,
     },
 
     'dnsmasq' : {
@@ -163,6 +196,16 @@ paths = {
     'responder' : {
 
         'conf' : RESPONDER_CONF,
+        'bin' : RESPONDER_BIN,
+        'db' : RESPONDER_DB,
+        'session_log' : RESPONDER_SESSION_LOG,
+        'poisoners_log' : RESPONDER_POISONERS_LOG,
+        'analyzer_log' : RESPONDER_ANALYZER_LOG,
+        'config_log' : RESPONDER_CONFIG_LOG,
+        'html' : RESPONDER_HTML,
+        'exe' : RESPONDER_EXE,
+        'cert' : RESPONDER_CERT,
+        'key' : RESPONDER_KEY,
     },
     'dhcp' : {
 

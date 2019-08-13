@@ -1,0 +1,5 @@
+__version__ = '1.7.0'
+__codename__ = 'Power Overwhelming'
+__author__ = '@s0lst1c3'
+__contact__ = 'gryan@specterops.io'
+__tagline__ = 'Rogue AP attacks for operators.'

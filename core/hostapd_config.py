@@ -14,7 +14,8 @@ class HostapdConfig(object):
             'general' : self.populate_general(settings, options),
         }
 
-        if options['hw_mode'] is None: 
+
+        if options['hw_mode'] is None:
             hw_mode = settings.dict['core']['hostapd']['general']['hw_mode']
         else:
             hw_mode = options['hw_mode']
@@ -22,37 +23,45 @@ class HostapdConfig(object):
         if hw_mode == 'n':
             configs['80211n'] = self.populate_80211n(settings, options)
 
-        if options['auth'] == 'wpa' or options['reap_creds']:
+        if options['reap_creds'] and options['auth'] is None:
+            options['auth'] = 'wpa-eap'
 
+        if options['auth'] == 'wpa-eap':
             configs['wpa'] = self.populate_wpa(settings, options)
-
             configs['eap'] = self.populate_eap(settings, options)
-        
-        if options['wmm']:
+        elif options['auth'] == 'wpa-psk':
+            configs['wpa'] = self.populate_wpa(settings, options)
+            configs['psk'] = self.populate_psk(settings, options)
 
+        if options['wmm']:
             configs['wmm'] = self.populate_wmm(settings, options)
+
+        if options['auth'] == 'owe':
+            configs['owe'] = self.populate_owe(settings, options)
+
+        if options['auth'] == 'owe-transition':
+            configs['owe_transition'] = self.populate_owe_transition(settings, options)
+            configs['populate_owe_transition_open_bss'] = self.populate_owe_transition_open_bss(settings, options)
 
         self.dict = configs
 
         if options['debug']:
-            print
-            print
-            print '[debug] HostapdConf:'
-            print json.dumps(self.dict, indent=4, sort_keys=True)
+            print('\n\n[debug] HostapdConf:')
+            print(json.dumps(self.dict, indent=4, sort_keys=True))
 
     def save(self):
-    
+
         shutil.move(self.path, self.save_path)
-        print '[*] Config saved to:', self.save_path
+        print('[*] Config saved to:', self.save_path)
 
     def write(self):
 
         with open(self.path, 'w') as output_handle:
 
             for section in self.dict:
-    
+
                 output_handle.write('# %s ---\n\n' % section)
-                for key,value in self.dict[section].items():
+                for key,value in list(self.dict[section].items()):
                     output_handle.write('%s=%s\n' % (key,value))
                 output_handle.write('\n')
 
@@ -60,19 +69,14 @@ class HostapdConfig(object):
         try:
             os.remove(self.path)
         except OSError:
+            print('[*] Can\'t remove non-existant config file.')
             pass
 
     def populate_eap(self, settings, options):
 
-        
-        return {
+        eap_configs = {
             'eap_user_file' : settings.dict['paths']['hostapd']['eap_user'],
-            'ca_cert' : settings.dict['paths']['hostapd']['ca_pem'],
-            'server_cert' : settings.dict['paths']['hostapd']['server_pem'],
-            'private_key' : settings.dict['paths']['hostapd']['private_key'],
-            'dh_file' : settings.dict['paths']['hostapd']['dh'],
             'eaphammer_logfile' : settings.dict['paths']['hostapd']['log'],
-            'private_key_passwd' : settings.dict['core']['hostapd']['eap']['private_key_passwd'],
 
             'eap_server' : settings.dict['core']['hostapd']['eap']['eap_server'],
             'eap_fast_a_id' : settings.dict['core']['hostapd']['eap']['eap_fast_a_id'],
@@ -84,6 +88,81 @@ class HostapdConfig(object):
             'pac_opaque_encr_key' : settings.dict['core']['hostapd']['eap']['pac_opaque_encr_key'],
             'wpa_key_mgmt' : settings.dict['core']['hostapd']['eap']['wpa_key_mgmt'],
         }
+
+        if options['capture_wpa_handshakes'] is None:
+            eap_configs['capture_wpa_handshakes'] = settings.dict['core']['hostapd']['eap']['capture_wpa_handshakes']
+        elif options['capture_wpa_handshakes'] == 'yes':
+            eap_configs['capture_wpa_handshakes'] = '1'
+        elif options['capture_wpa_handshakes'] == 'no':
+            eap_configs['capture_wpa_handshakes'] = '0'
+        else:
+            raise Exception('This should never happen.')
+
+        if options['psk_capture_file'] is None:
+            eap_configs['psk_capture_file'] = settings.dict['paths']['psk']['psk_capture_file']
+        else:
+            eap_configs['psk_capture_file'] = options['psk_capture_file'] 
+
+        print('[*] WPA handshakes will be saved to {}'.format(eap_configs['psk_capture_file']))
+        
+        if options['dh_file'] is not None:
+            # if the user specified a dh file manually, use this
+            eap_configs['dh_file'] = options['dh_file']
+        else:
+            eap_configs['dh_file'] = settings.dict['paths']['certs']['dh']
+
+
+        # All certificate options within hostapd's default configuration file are
+        # are completely ignored if even one certificate option is passed
+        # via the CLI. This is done to prevent the default config and CLI flags
+        # from interfering with one another.
+        override_conf = False
+        if options['ca_cert'] is not None:
+            override_conf = True
+        if options['server_cert'] is not None:
+            override_conf = True
+        if options['private_key'] is not None:
+            override_conf = True
+        if options['private_key_passwd'] is not None:
+            override_conf = True
+
+        if override_conf:
+        
+            # we're going to assume that any certs or keys that the user has given us are
+            # valid. onus is on them to get that right.
+
+            # doesn't make sense to do this without specifying a server cert
+            if options['server_cert'] is not None:
+                eap_configs['server_cert'] = options['server_cert']
+            else:
+                raise Exception('Certificate conf override detected but not server cert specified.')
+
+            # if no private key is specified, assume it is included in the server_cert file
+            # (think: fullchain.pem)
+            if options['private_key'] is None:
+                eap_configs['private_key'] = options['server_cert']
+            else:
+                eap_configs['private_key'] = options['private_key']
+
+            # if no ca cert is specified, assume it is included in the server_cert file
+            # and therefore is not needed (think: Let's Encrypt)
+            if options['ca_cert'] is None:
+                eap_configs['ca_cert'] = options['server_cert']
+            else:
+                eap_configs['ca_cert'] = options['ca_cert']
+
+            # if there's a private key password, we specify that here
+            eap_configs['private_key_passwd'] = options['private_key_passwd']
+
+        else:
+
+            # if we're not overriding the active configuration, use the currently active
+            # certificate chain
+
+            eap_configs['server_cert'] = settings.dict['paths']['certs']['active_full_chain']
+            eap_configs['private_key'] = settings.dict['paths']['certs']['active_full_chain']
+
+        return eap_configs
 
     def populate_wpa(self, settings, options):
 
@@ -109,36 +188,64 @@ class HostapdConfig(object):
 
         return wpa_configs
 
+    def populate_psk(self, settings, options):
+
+        psk_configs = { }
+
+        if options['wpa_passphrase'] is None:
+            psk_configs['wpa_passphrase'] = settings.dict['core']['hostapd']['psk']['wpa_passphrase']
+        else:
+            psk_configs['wpa_passphrase'] = options['wpa_passphrase']
+
+        if options['capture_wpa_handshakes'] is None:
+            psk_configs['capture_wpa_handshakes'] = settings.dict['core']['hostapd']['psk']['capture_wpa_handshakes']
+        elif options['capture_wpa_handshakes'] == 'yes':
+            psk_configs['capture_wpa_handshakes'] = '1'
+        elif options['capture_wpa_handshakes'] == 'no':
+            psk_configs['capture_wpa_handshakes'] = '0'
+        else:
+            raise Exception('This should never happen.')
+
+        if options['psk_capture_file'] is None:
+            psk_configs['psk_capture_file'] = settings.dict['paths']['psk']['psk_capture_file']
+        else:
+            psk_configs['psk_capture_file'] = options['psk_capture_file'] 
+
+        print('[*] WPA handshakes will be saved to {}'.format(psk_configs['psk_capture_file']))
+        
+
+        return psk_configs
+
 
     def populate_wmm(self, settings, options):
 
         return {
-        
-            'wmm_enabled' : settings.dict['core']['hostapd']['wmm']['wmm_enabled'], 
-            'wmm_ac_bk_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_cwmin'], 
-            'wmm_ac_bk_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_cwmax'], 
-            'wmm_ac_bk_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_aifs'], 
-            'wmm_ac_bk_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_txop_limit'], 
-            'wmm_ac_bk_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_acm'], 
-            'wmm_ac_be_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_aifs'], 
-            'wmm_ac_be_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_cwmin'], 
-            'wmm_ac_be_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_cwmax'], 
-            'wmm_ac_be_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_txop_limit'], 
-            'wmm_ac_be_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_acm'], 
-            'wmm_ac_vi_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_aifs'], 
-            'wmm_ac_vi_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_cwmin'], 
-            'wmm_ac_vi_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_cwmax'], 
-            'wmm_ac_vi_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_txop_limit'], 
-            'wmm_ac_vi_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_acm'], 
-            'wmm_ac_vo_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_aifs'], 
-            'wmm_ac_vo_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_cwmin'], 
-            'wmm_ac_vo_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_cwmax'], 
-            'wmm_ac_vo_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_txop_limit'], 
-            'wmm_ac_vo_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_acm'], 
+
+            'wmm_enabled' : settings.dict['core']['hostapd']['wmm']['wmm_enabled'],
+            'wmm_ac_bk_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_cwmin'],
+            'wmm_ac_bk_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_cwmax'],
+            'wmm_ac_bk_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_aifs'],
+            'wmm_ac_bk_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_txop_limit'],
+            'wmm_ac_bk_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_bk_acm'],
+            'wmm_ac_be_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_aifs'],
+            'wmm_ac_be_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_cwmin'],
+            'wmm_ac_be_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_cwmax'],
+            'wmm_ac_be_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_txop_limit'],
+            'wmm_ac_be_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_acm'],
+            'wmm_ac_vi_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_be_aifs'],
+            'wmm_ac_vi_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_cwmin'],
+            'wmm_ac_vi_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_cwmax'],
+            'wmm_ac_vi_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_txop_limit'],
+            'wmm_ac_vi_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vi_acm'],
+            'wmm_ac_vo_aifs' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_aifs'],
+            'wmm_ac_vo_cwmin' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_cwmin'],
+            'wmm_ac_vo_cwmax' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_cwmax'],
+            'wmm_ac_vo_txop_limit' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_txop_limit'],
+            'wmm_ac_vo_acm' : settings.dict['core']['hostapd']['wmm']['wmm_ac_vo_acm'],
         }
 
     def populate_80211n(self, settings, options):
-    
+
         dot11n_configs = {}
 
         dot11n_configs['ieee80211n'] = settings.dict['core']['hostapd']['80211n']['ieee80211n']
@@ -177,7 +284,7 @@ class HostapdConfig(object):
             elif ht40 == 'minus':
                 ht_capab += '[HT40-]'
             elif ht40 == 'auto':
-                
+
                 if options['channel'] is None:
                     channel = int(settings.dict['core']['hostapd']['general']['channel'])
                 else:
@@ -193,7 +300,7 @@ class HostapdConfig(object):
                     ht_capab += '[HT40-]'
                 else:
                     raise ValueError('Invalid channel selected')
-        
+
             else:
                 raise Exception('Invalid option detected')
 
@@ -223,7 +330,7 @@ class HostapdConfig(object):
             ht_capab += '[RX-STBC12]'
         elif options['max_spatial_streams'] == 3:
             ht_capab += '[RX-STBC123]'
-            
+
         if options['lsig_txop_prot']:
             ht_capab += '[LSIG-TXOP-PROT]'
 
@@ -238,8 +345,8 @@ class HostapdConfig(object):
 
         if options['ldpc']:
             ht_capab += '[LDPC]'
-            
-        dot11n_configs['ht_capab'] = ht_capab 
+
+        dot11n_configs['ht_capab'] = ht_capab
 
         # end ht_capab
 
@@ -266,19 +373,18 @@ class HostapdConfig(object):
         else:
             general_configs['channel'] = options['channel']
 
-        if options['karma'] is None:
-            general_configs['use_karma'] = settings.dict['core']['hostapd']['general']['use_karma']
-        else:
-            general_configs['use_karma'] = options['karma']
 
         if options['autocrack'] is None:
             general_configs['use_autocrack'] = str(int(settings.dict['core']['hostapd']['general']['use_autocrack']))
         else:
             general_configs['use_autocrack'] = str(int(options['autocrack']))
-        
+
 
         if options['cloaking'] is None:
-            general_configs['ignore_broadcast_ssid'] = settings.dict['core']['hostapd']['general']['ignore_broadcast_ssid']
+            if options['auth'] == 'owe-transition':
+                general_configs['ignore_broadcast_ssid'] = settings.dict['core']['hostapd']['owe_transition']['owe_transition_ignore_broadcast_ssid']
+            else:
+                general_configs['ignore_broadcast_ssid'] = settings.dict['core']['hostapd']['general']['ignore_broadcast_ssid']
 
         else:
 
@@ -294,23 +400,23 @@ class HostapdConfig(object):
         # if user does not specify a hardware mode, from from the config ifle
         if options_hw_mode is None:
 
-            # validate hw_mode loaded from config file 
+            # validate hw_mode loaded from config file
             if int(general_configs['channel']) > 0 and int(general_configs['channel']) < 15:
 
                 if settings_hw_mode not in ['b', 'g']:
-            
-                    print '[!] The hw_mode specified in hostapd.ini is invalid for the selected channel (%s, %s)' % (settings_hw_mode, str(general_configs['channel']))
 
-                    print '[!] Falling back to hw_mode: g'
+                    print('[!] The hw_mode specified in hostapd.ini is invalid for the selected channel (%s, %s)' % (settings_hw_mode, str(general_configs['channel'])))
+
+                    print('[!] Falling back to hw_mode: g')
                     settings_hw_mode = 'g'
 
             elif settings_hw_mode != 'a':
 
-                print '[!] The hw_mode specified in hostapd.ini is invalid for the selected channel (%s, %s)' % (settings_hw_mode, str(general_configs['channel']))
-                
-                print '[!] Falling back to hw_mode: a'
+                print('[!] The hw_mode specified in hostapd.ini is invalid for the selected channel (%s, %s)' % (settings_hw_mode, str(general_configs['channel'])))
+
+                print('[!] Falling back to hw_mode: a')
                 settings_hw_mode = 'a'
-                
+
             general_configs['hw_mode'] = settings_hw_mode
 
 
@@ -318,15 +424,15 @@ class HostapdConfig(object):
         # for the current channel
         elif options_hw_mode == 'n':
 
-            print '[*] 802.11n mode activated...'
-        
+            print('[*] 802.11n mode activated...')
+
             if general_configs['channel'] > 0 and general_configs['channel'] < 15:
                 general_configs['hw_mode'] = 'g'
             else:
                 general_configs['hw_mode'] = 'a'
 
-            print '[*] Automatically setting hw_mode to %s based on channel selection' % general_configs['hw_mode']
-        
+            print('[*] Automatically setting hw_mode to %s based on channel selection' % general_configs['hw_mode'])
+
         # if the user selects a hw_mode other than n, validate and set it
         elif options_hw_mode is not None:
 
@@ -335,31 +441,31 @@ class HostapdConfig(object):
 
                 if options_hw_mode not in ['b', 'g']:
 
-                    print '[!] The selected hw_mode is invalid for the selected channel (%s, %s)' % (options_hw_mode, str(general_configs['channel']))
+                    print('[!] The selected hw_mode is invalid for the selected channel (%s, %s)' % (options_hw_mode, str(general_configs['channel'])))
 
-                    print '[!] Falling back to hw_mode: g'
+                    print('[!] Falling back to hw_mode: g')
 
                     options_hw_mode = 'g'
 
             elif options_hw_mode != 'a':
 
-                print '[!] The selected hw_mode is invalid for the selected channel (%s, %s)' % (options_hw_mode, str(general_configs['channel']))
-                
-                print '[!] Falling back to hw_mode: a'
+                print('[!] The selected hw_mode is invalid for the selected channel (%s, %s)' % (options_hw_mode, str(general_configs['channel'])))
+
+                print('[!] Falling back to hw_mode: a')
                 settings_hw_mode = 'a'
-            
+
             general_configs['hw_mode'] = options_hw_mode
 
         else:
 
             # we shouldn't ever get to this point
             raise ValueError('Invalid value for options[\'hw_mode\']')
-            
+
         if options['max_num_stations'] is None:
             general_configs['max_num_sta'] = settings.dict['core']['hostapd']['general']['max_num_sta']
         else:
             general_configs['max_num_sta'] = options['max_num_stations']
-            
+
         if options['rts_threshold'] is None:
             general_configs['rts_threshold'] = settings.dict['core']['hostapd']['general']['rts_threshold']
         else:
@@ -395,4 +501,104 @@ class HostapdConfig(object):
         general_configs['logger_stdout_level'] = settings.dict['core']['hostapd']['general']['logger_stdout_level']
         general_configs['macaddr_acl'] = settings.dict['core']['hostapd']['general']['macaddr_acl']
 
+        if options['karma']:
+            general_configs['use_karma'] = '1'
+        else:
+            general_configs['use_karma'] = settings.dict['core']['hostapd']['general']['use_karma']
+
+        if options['loud']:
+            general_configs['loud_karma'] = '1'
+        else:
+            general_configs['loud_karma'] = settings.dict['core']['hostapd']['general']['loud_karma']
+
+        if options['known_beacons']:
+            general_configs['known_beacons'] = '1'
+            general_configs['known_ssids_file'] = options['known_ssids_file']
+        else:
+            general_configs['known_beacons'] = settings.dict['core']['hostapd']['general']['known_beacons']
+
+        if options['pmf'] is None:
+            if options['auth'] == 'owe':
+                general_configs['ieee80211w'] = settings.dict['core']['hostapd']['owe']['owe_ieee80211w']
+            elif options['auth'] == 'owe-transition':
+                general_configs['ieee80211w'] = settings.dict['core']['hostapd']['owe_transition']['owe_transition_ieee80211w']
+            #if options['auth'] == 'owe-psk':
+            #    general_configs['ieee80211w'] = settings.dict['core']['hostapd']['owe']['owe_psk_ieee80211w']
+
+            else:
+                general_configs['ieee80211w'] = settings.dict['core']['hostapd']['general']['ieee80211w']
+        elif options['pmf'] == 'disable':
+            general_configs['ieee80211w'] = '0'
+        elif options['pmf'] == 'enable':
+            general_configs['ieee80211w'] = '1'
+        elif options['pmf'] == 'require':
+            general_configs['ieee80211w'] = '2'
+        else:
+            raise Exception('[hostapd_conf] PMF not set to known value. This should never happen.')
+
+
         return general_configs
+
+    def populate_owe(self, settings, options):
+
+        owe_configs = {
+                
+            'wpa' : settings.dict['core']['hostapd']['owe']['wpa'],
+            'wpa_key_mgmt' : settings.dict['core']['hostapd']['owe']['wpa_key_mgmt'],
+            'rsn_pairwise' : settings.dict['core']['hostapd']['owe']['rsn_pairwise'],
+        }
+
+        return owe_configs
+
+    def populate_owe_transition(self, settings, options):
+
+        owe_transition_configs = {
+
+            'wpa' : settings.dict['core']['hostapd']['owe_transition']['wpa'],
+            'wpa_key_mgmt' : settings.dict['core']['hostapd']['owe_transition']['wpa_key_mgmt'],
+            'rsn_pairwise' : settings.dict['core']['hostapd']['owe_transition']['rsn_pairwise'],
+        }
+
+        if options['owe_transition_ssid'] is None:
+            owe_transition_configs['owe_transition_ssid'] = '"{}"'.format(settings.dict['core']['hostapd']['owe_transition']['owe_transition_ssid'])
+        else:
+            owe_transition_configs['owe_transition_ssid'] = '"{}"'.format(options['owe_transition_ssid'])
+
+        if options['owe_transition_bssid'] is None:
+            owe_transition_configs['owe_transition_bssid'] = settings.dict['core']['hostapd']['owe_transition']['owe_transition_bssid']
+        else:
+            owe_transition_configs['owe_transition_bssid'] = options['owe_transition_ssid']
+
+        return owe_transition_configs
+
+    def populate_owe_transition_open_bss(self, settings, options):
+
+        owe_transition_open_bss_configs = {
+
+            'bss' : '{}_0'.format(options['interface']),
+        }
+
+        # set bssid and ssid values for open BSS ------------------
+        if options['owe_transition_ssid'] is None:
+            owe_transition_open_bss_configs['ssid'] = settings.dict['core']['hostapd']['owe_transition']['owe_transition_ssid']
+        else:
+            owe_transition_open_bss_configs['ssid'] = options['owe_transition_ssid']
+
+        if options['owe_transition_bssid'] is None:
+            owe_transition_open_bss_configs['bssid'] = settings.dict['core']['hostapd']['owe_transition']['owe_transition_bssid']
+        else:
+            owe_transition_open_bss_configs['bssid'] = options['owe_transition_ssid']
+
+        # set owe_transition_bssid and owe_transition_ssid values for open BSS ---
+        if options['essid'] is None:
+            owe_transition_open_bss_configs['owe_transition_ssid'] = '"{}"'.format(settings.dict['core']['hostapd']['general']['ssid'])
+        else:
+            owe_transition_open_bss_configs['owe_transition_ssid'] = '"{}"'.format(options['essid'])
+
+        if options['bssid'] is None:
+            owe_transition_open_bss_configs['owe_transition_bssid'] = settings.dict['core']['hostapd']['general']['bssid']
+        else:
+            owe_transition_open_bss_configs['owe_transition_bssid'] = options['bssid']
+
+        return owe_transition_open_bss_configs
+

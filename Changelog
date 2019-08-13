@@ -86,8 +86,49 @@ Fixed issue where setup script was unable to download rockyou wordlist due to: h
 0.4.0 - Gabriel Ryan <gabriel@digitalsilence.com>
 - New feature: password spraying attacks
 
+0.5.0 - Gabriel Ryan <gabriel@digitalsilence.com>
+EAPHammer now uses a local build of libssl that exists independently of the systemwide install. This local version is compiled with support for SSLv3, allowing EAPHammer to be used against legacy clients without compromising the integrity of the attacker's operating system.
 
+0.6.0 - Gabriel Ryan <gabriel@solstice.sh>
+EAPHammer ported to Python 3.
 
+0.7.0 - Gabriel Ryan <gabriel@solstice.sh>
+EAPHammer is now able to import external certificates, generate self-signed and trusted certificates, and load certificates at runtime. 
 
+0.8.0 - Gabriel Ryan <gryan@specterops.io>
+Ported to hostapd 2.8 base.
 
+0.9.0 - Gabriel Ryan <gryan@specterops.io>
+Support for GTC logging added. GTC Downgrade attack implemented by editing .eap_user file.
 
+0.9.1 - Gabriel Ryan <gryan@specterops.io>
+Version string moved to a more sensible location.
+
+1.0.0 - Gabriel Ryan <gryan@specterops.io>
+Support for EAP-MD5,EAP-PEAP/MD5, and EAP-TTLS/MD5 added.
+
+1.1.0 - Gabriel Ryan <gryan@specterops.io>
+Added root check.
+
+1.1.1 - Gabriel Ryan <gryan@specterops.io>
+Fixed index error in autocrack.
+
+1.2.0 - Gabriel Ryan <gryan@specterops.io>
+No longer maintaining a dedicated version of Responder. Instead, relying on
+external dependency.
+
+1.3.0 - Gabriel Ryan <gryan@specterops.io>
+Hostapd now compiled with support for OWE, WPA3, and 802.11ax. However, these protocols have not yet been integrated with the rest of the project.
+
+1.4.0 - Gabriel Ryan <gryan@specterops.io>
+Added support for advanced karma attacks: known beacon (credit: Census Labs) and loud mode (credit: Sensepost). Added support for 802.11w (Protected Management Frames).
+
+1.5.0 - Gabriel Ryan <gryan@specterops.io>
+Added support for rogue AP attacks against networks that use OWE and OWE Transition Mode.
+
+1.6.0 - Gabriel Ryan <gryan@specterops.io>
+Added support for rogue AP attacks using WPA2-PSK (with handshake captures)(credit: Sensepost for original hostapd patch).
+
+1.7.0 - Gabriel Ryan <gryan@specterops.io>
+Added "Troll Defender" option that triggers Windows Defender on nearby Windows
+devices.

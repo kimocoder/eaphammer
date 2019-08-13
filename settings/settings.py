@@ -2,8 +2,8 @@ import json
 import os
 import glob
 
-import paths
-import ConfigParser
+import settings.paths
+import configparser
 
 CONF_SUBDIRS = [
     'core',
@@ -16,7 +16,7 @@ class EaphammerSettings(object):
 
         self.dict = { 
 
-            'paths' : paths.paths,
+            'paths' : settings.paths.paths,
         }
         self.parse_configs()
 
@@ -32,7 +32,7 @@ class EaphammerSettings(object):
 
             for filename in glob.glob('%s/*.ini' % config_dir):
 
-                parser = ConfigParser.ConfigParser()
+                parser = configparser.ConfigParser()
                 parser.read(filename)
                 module = os.path.basename(os.path.normpath(filename))
 
